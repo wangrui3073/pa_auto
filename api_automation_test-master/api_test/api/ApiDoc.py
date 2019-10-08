@@ -1073,6 +1073,7 @@ def download_doc(request):
     else:
         file_name = str(int(time.time())) + ".xlsx"
 
+
     def file_iterator(_file, chunk_size=512):
         while True:
             c = _file.read(chunk_size)
