@@ -55,8 +55,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/api_test/api/ApiDoc.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="300">
-              <caret line="1082" column="21" lean-forward="true" selection-start-line="1082" selection-start-column="21" selection-end-line="1082" selection-end-column="21" />
+            <state relative-caret-position="190">
+              <caret line="1074" selection-start-line="1074" selection-end-line="1074" />
             </state>
           </provider>
         </entry>
@@ -454,7 +454,7 @@
       <workItem from="1561966758272" duration="350000" />
       <workItem from="1570521915693" duration="150000" />
       <workItem from="1570522128600" duration="5461000" />
-      <workItem from="1570528019764" duration="924000" />
+      <workItem from="1570528019764" duration="1216000" />
     </task>
     <task id="LOCAL-00001" summary="1.重构新增项目，修改项目接口代码，增加详细注释">
       <created>1527915774102</created>
@@ -621,7 +621,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="91425000" />
+    <option name="totallyTimeSpent" value="91717000" />
   </component>
   <component name="TodoView">
     <todo-panel id="selected-file">
@@ -1031,8 +1031,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/api_test/api/ApiDoc.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="300">
-          <caret line="1082" column="21" lean-forward="true" selection-start-line="1082" selection-start-column="21" selection-end-line="1082" selection-end-column="21" />
+        <state relative-caret-position="190">
+          <caret line="1074" selection-start-line="1074" selection-end-line="1074" />
         </state>
       </provider>
     </entry>
