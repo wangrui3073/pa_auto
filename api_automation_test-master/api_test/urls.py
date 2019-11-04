@@ -73,4 +73,11 @@ urlpatterns = [
     url(r'user/login', user.obtain_auth_token),
     url(r'user/pwd', user.PwdView.as_view()),
     url(r'user/VisitorRecord', VisitorRecord.Record.as_view()),
+    # 脚本应用相关
+    url(r'automation/get_script', Case.ApplicationScriptList.as_view()),
+    url(r'automation/add_script', Case.AddApplicationScript.as_view()),
+    url(r'automation/start_script', Case.StartTaskApplicationScript.as_view()),
+    url(r'automation/update_script', Case.UpdateApplicationScript.as_view()),
+    url(r'automation/delete_script', Case.DeleteApplicationScript.as_view()),
+    url(r'automation/look_case', Case.LookScriptCase.as_view()),
 ]

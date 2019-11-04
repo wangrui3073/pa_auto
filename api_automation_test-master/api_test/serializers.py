@@ -6,7 +6,32 @@ from api_test.models import Project, ProjectDynamic, ProjectMember, GlobalHost, 
     ApiInfo, APIRequestHistory, ApiOperationHistory, AutomationGroupLevelFirst, \
     AutomationTestCase, AutomationCaseApi, AutomationHead, AutomationParameter, AutomationTestTask, \
     AutomationTestResult, ApiHead, ApiParameter, ApiResponse, ApiParameterRaw, AutomationParameterRaw, \
-    AutomationResponseJson, AutomationTaskRunTime, AutomationCaseTestResult, AutomationReportSendConfig
+    AutomationResponseJson, AutomationTaskRunTime, AutomationCaseTestResult, AutomationReportSendConfig, \
+    ApplicationScript, ScriptCase, AutomationParameterPath, AutomationParameterQuery
+
+# path请求参数序列化
+class AutomationParameterPathSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutomationParameterPath
+        fields = ('id', 'automationCaseApi', 'name', 'value', 'interrelate')
+
+# path请求参数反序列化
+class AutomationParameterPathDeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutomationParameterPath
+        fields = ('id', 'automationCaseApi_id', 'name', 'value', 'interrelate')
+
+# query请求参数序列化
+class AutomationParameterQuerySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutomationParameterQuery
+        fields = ('id', 'automationCaseApi', 'name', 'value', 'interrelate')
+
+# query请求参数反序列化
+class AutomationParameterQueryDeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutomationParameterQuery
+        fields = ('id', 'automationCaseApi_id', 'name', 'value', 'interrelate')
 
 
 class TokenSerializer(serializers.ModelSerializer):
@@ -434,10 +459,12 @@ class AutomationCaseApiSerializer(serializers.ModelSerializer):
     header = AutomationHeadSerializer(many=True, read_only=True)
     parameterList = AutomationParameterSerializer(many=True, read_only=True)
     parameterRaw = AutomationParameterRawSerializer(many=False, read_only=True)
+    parameterPath = AutomationParameterPathSerializer(many=True, read_only=True)
+    parameterQuery = AutomationParameterQuerySerializer(many=True, read_only=True)
 
     class Meta:
         model = AutomationCaseApi
-        fields = ('id', 'name', 'httpType', 'requestType', 'apiAddress', 'header', 'requestParameterType', 'formatRaw',
+        fields = ('id', 'name', 'httpType', 'requestType', 'apiAddress', 'header', 'parameterPath', 'parameterQuery', 'requestParameterType', 'formatRaw',
                   'parameterList', 'parameterRaw', 'examineType', 'httpCode', 'responseData')
 
 
@@ -602,3 +629,26 @@ class AutomationReportSendConfigDeserializer(serializers.ModelSerializer):
     class Meta:
         model = AutomationReportSendConfig
         fields = ("id", "project_id", 'reportFrom', 'mailUser', 'mailPass', 'mailSmtp')
+
+# ---------------------------------------------------------------------
+
+# 应用和对应的脚本路径序列化
+class ApplicationScriptSerializer(serializers.ModelSerializer):
+    updateTime = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", required=False, read_only=True)
+    # createUser = serializers.CharField(source='user.first_name')
+
+    class Meta:
+        model = ApplicationScript
+        fields = ('id', 'automationGroupLevelFirst', 'name','path', 'enter_file', 'exit_file', 'description', 'updateTime')
+
+# 脚本对应用例测试情况
+class ScriptCaseSerializer(serializers.ModelSerializer):
+    updateTime = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", required=False, read_only=True)
+
+    class Meta:
+        model = ScriptCase
+        fields = ('id', 'case_name', 'test_result', 'case_test_log', 'updateTime')
+
+
+
+

@@ -2,6 +2,8 @@
 import os
 import sys
 # import django
+from api_automation_test import settings
+
 if __name__ == "__main__":
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "api_automation_test.settings")
     try:
@@ -13,3 +15,7 @@ if __name__ == "__main__":
             "forget to activate a virtual environment?"
         ) from exc
     execute_from_command_line(sys.argv)
+
+    # os.chdir(settings.BASE_DIR)
+    # print(os.getcwd())
+    # os.system("celery -A celery_tasks.main worker -l info")

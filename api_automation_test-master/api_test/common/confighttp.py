@@ -23,7 +23,7 @@ from requests import ReadTimeout
 
 from api_test.common.common import check_json, record_results
 from api_test.models import GlobalHost, AutomationCaseApi, AutomationParameter, AutomationTestResult, AutomationHead, \
-    AutomationParameterRaw
+    AutomationParameterRaw, AutomationParameterPath, AutomationParameterPath, AutomationParameterQuery
 from api_test.serializers import AutomationCaseApiSerializer, AutomationParameterRawSerializer
 
 logger = logging.getLogger(__name__)  # 这里使用 __name__ 动态搜索定义的 logger 配置，这里有一个层次关系的知识点。
@@ -37,6 +37,8 @@ def test_api(host_id, case_id, project_id, _id):
     :param _id:  用例下接口ID
     :param project_id: 所属项目
     :return:
+    ('id', 'name', 'httpType', 'requestType', 'apiAddress', 'header', 'requestParameterType',
+     'formatRaw', 'parameterList', 'parameterRaw', 'examineType', 'httpCode', 'responseData')
     """
     host = GlobalHost.objects.get(id=host_id, project=project_id)
     data = AutomationCaseApiSerializer(AutomationCaseApi.objects.get(id=_id, automationTestCase=case_id)).data
@@ -49,10 +51,28 @@ def test_api(host_id, case_id, project_id, _id):
     examine_type = data['examineType']
     http_code = data['httpCode']
     response_parameter_list = data['responseData']
+    data_path = json.loads(serializers.serialize('json', AutomationParameterPath.objects.filter(automationCaseApi=_id)))
+    data_query = json.loads(serializers.serialize('json', AutomationParameterQuery.objects.filter(automationCaseApi=_id)))
     if http_type == 'HTTP':
         url = 'http://'+address
     else:
         url = 'https://'+address
+
+    if data_path:
+        for i in data_path:
+            i_path = i["fields"]["value"]
+            i_name = i["fields"]["name"]
+            url = url.replace("{"+i_name+"}", i_path)
+    if data_query:
+        query_dic = {}
+        for j in data_query:
+            key_ = j['fields']['name']
+            value = j['fields']['value']
+            query_dic[key_] = value
+        from urllib.parse import urlencode
+        query = urlencode(query_dic)
+        url = url + "?" + query
+
     if data['requestParameterType'] == 'form-data':
         parameter_list = json.loads(serializers.serialize('json',
                                                           AutomationParameter.objects.filter(automationCaseApi=_id)))
@@ -180,6 +200,14 @@ def test_api(host_id, case_id, project_id, _id):
                 return 'fail'
         else:
             header[key_] = value
+
+    header = {
+        "Authorization": "Token c292e409634a54e96b2338731cd116960e4d545b",
+        "Content-Type":"application/json"
+    }
+    # url = "http://192.168.59.142:8000/book/6/"
+    # parameter = {"btitle":"山海经003","author":"访客撒酒疯萨拉","afa":"fafsdfaasfaaf"}
+
     try:
         if request_type == 'GET':
             code, response_data, header_data = get(header, url, request_parameter_type, parameter)
@@ -307,7 +335,7 @@ def post(header, address, request_parameter_type, data):
     """
     if request_parameter_type == 'raw':
         data = json.dumps(data)
-    response = requests.post(url=address, data=data, headers=header, timeout=8)
+    response = requests.post(url=address, data=data, headers=header, timeout=800000)
     try:
         return response.status_code, response.json(), response.headers
     except json.decoder.JSONDecodeError:

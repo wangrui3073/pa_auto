@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 import docx
 from docx.oxml.ns import qn
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)  # 这里使用 __name__ 动态搜索定义
 
 
 class Write:
-    def __init__(self):     
+    def __init__(self):
         self.doc = docx.Document()
         self.doc.styles['Normal'].font.name = u'宋体'
         self.doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), u'宋体')
@@ -19,7 +20,7 @@ class Write:
         index = 1
         if group_data:
             for item in group_data:
-                self.doc.add_paragraph(style="Heading 1").add_run(str(index)+"、"+item["name"]).font.size = 300000
+                self.doc.add_paragraph(style="Heading 1").add_run(str(index)+"."+item["name"]).font.size = 300000
                 _id = 1
                 for items in item['First']:
                     self.doc.add_paragraph(style="Heading 2").add_run(str(_id)+"."+items['name'],

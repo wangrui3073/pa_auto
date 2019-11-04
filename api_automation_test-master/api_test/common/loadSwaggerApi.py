@@ -49,26 +49,148 @@ def swagger_api(url, project, user):
                 requestApi["headDict"] = [{"name": "Content-Type", "value": data["consumes"][0]}]
             except KeyError:
                 requestApi["requestParameterType"] = "raw"
-            for j in data["parameters"]:
-                if j["in"] == "header":
-                    requestApi["headDict"].append({"name": j["name"].title(), "value": "String"})
-                elif j["in"] == "body":
-                    dto = j["name"][:1].upper() + j["name"][1:]
+
+            # for j in data["parameters"]:
+            #     if j["in"] == "header":
+            #         requestApi["headDict"].append({"name": j["name"].title(), "value": "String"})
+            #     elif j["in"] == "body":
+            #         dto = j["name"][:1].upper() + j["name"][1:]
+            #         try:
+            #             if requestApi["requestParameterType"] == "raw":
+            #                 parameter = {}
+            #                 for key, value in params[dto]["properties"].items():
+            #                     parameter[key] = value['type']
+            #                     requestApi["requestList"] = str(parameter)
+            #             else:
+            #                 parameter = []
+            #                 for key, value in params[dto]["properties"].items():
+            #                     parameter.append({"name": key, "value": value["type"], "_type": value["tyep"],
+            #                                       "required": True, "restrict": "", "description": ""})
+            #                 requestApi["requestList"] = parameter
+            #             # print(requestApi)
+            #         except:
+            #             pass
+
+            if data.get("parameters"):
+                path_ls = []
+                query_ls = []
+                for j in data["parameters"]:
+                    if j["in"] == "header":
+                        requestApi["headDict"].append({"name": j["name"].title(), "value": "String"})
+                    elif j["in"] == "path":
+                        path_ls.append({"name": j["name"], "value": j["type"], "_type": j.get("format"),
+                                        "required": j["required"], "restrict": "", "description": j["description"]})
+                    elif j["in"] == "query":
+                        query_ls.append({"name": j["name"], "value": j["type"], "_type": j.get("format"),
+                                         "required": j["required"], "restrict": "", "description": j["description"]})
+                    elif j["in"] == "body":
+                        if j.get("schema").get("$ref"):
+                            dto = j["schema"]["$ref"]
+                            dto = dto.split("/")
+                            dto = dto[2]
+                            try:
+                                if requestApi["requestParameterType"] == "raw":
+                                    parameter = {}
+                                    for key, value in params[dto]["properties"].items():
+                                        parameter[key] = value['type']
+                                        requestApi["requestList"] = str(parameter)
+                                else:
+                                    parameter = []
+                                    for key, value in params[dto]["properties"].items():
+                                        parameter.append({"name": key, "value": value["type"], "_type": value["tyep"],
+                                                          "required": True, "restrict": "", "description": ""})
+                                    requestApi["requestList"] = parameter
+                            except:
+                                pass
+                        elif j.get("schema").get("items"):
+                            if j.get("schema").get("items").get("type"):
+                                requestApi["requestList"] = "id数组;长度:null;示例:[1,2,3]"
+                            elif j.get("schema").get("items").get("$ref"):
+                                dto = j["schema"]["items"]["$ref"]
+                                dto = dto.split("/")
+                                dto = dto[2]
+                                try:
+                                    if requestApi["requestParameterType"] == "raw":
+                                        parameter = {}
+                                        for key, value in params[dto]["properties"].items():
+                                            parameter[key] = value['type']
+                                            requestApi["requestList"] = str(parameter)
+                                    else:
+                                        parameter = []
+                                        for key, value in params[dto]["properties"].items():
+                                            parameter.append(
+                                                {"name": key, "value": value["type"], "_type": value["tyep"],
+                                                 "required": True, "restrict": "", "description": ""})
+                                        requestApi["requestList"] = parameter
+                                except:
+                                    pass
+                            else:
+                                pass
+                requestApi["requestListPath"] = path_ls
+                requestApi["requestListQuery"] = query_ls
+            else:
+                pass
+            if data["responses"]["200"].get("schema"):
+                if data["responses"]["200"].get("schema").get("$ref"):
+                    dto = data["responses"]["200"]["schema"]["$ref"]
+                    dto = dto.split("/")
+                    dto = dto[2]
                     try:
                         if requestApi["requestParameterType"] == "raw":
                             parameter = {}
                             for key, value in params[dto]["properties"].items():
                                 parameter[key] = value['type']
-                                requestApi["requestList"] = str(parameter)
+                                requestApi["responseList"] = str(parameter)
                         else:
                             parameter = []
                             for key, value in params[dto]["properties"].items():
                                 parameter.append({"name": key, "value": value["type"], "_type": value["tyep"],
                                                   "required": True, "restrict": "", "description": ""})
-                            requestApi["requestList"] = parameter
-                        # print(requestApi)
+                            requestApi["responseList"] = parameter
                     except:
                         pass
+                elif data["responses"]["200"].get("schema").get("items"):
+                    dto = data["responses"]["200"]["schema"]["items"]["$ref"]
+                    dto = dto.split("/")
+                    dto = dto[2]
+                    try:
+                        if requestApi["requestParameterType"] == "raw":
+                            parameter = {}
+                            for key, value in params[dto]["properties"].items():
+                                parameter[key] = value['type']
+                                requestApi["responseList"] = str(parameter)
+                        else:
+                            parameter = []
+                            for key, value in params[dto]["properties"].items():
+                                parameter.append({"name": key, "value": value["type"], "_type": value["tyep"],
+                                                  "required": True, "restrict": "", "description": ""})
+                            requestApi["responseList"] = parameter
+                    except:
+                        pass
+                elif data["responses"]["200"].get("schema").get("type"):
+                    requestApi["responseList"] = "响应type/format"
+                elif data["responses"]["200"].get("schema").get("additionalProperties"):
+                    dto = data["responses"]["200"]["schema"]["additionalProperties"]["items"]["$ref"]
+                    dto = dto.split("/")
+                    dto = dto[2]
+                    try:
+                        if requestApi["requestParameterType"] == "raw":
+                            parameter = {}
+                            for key, value in params[dto]["properties"].items():
+                                parameter[key] = value['type']
+                                requestApi["responseList"] = str(parameter)
+                        else:
+                            parameter = []
+                            for key, value in params[dto]["properties"].items():
+                                parameter.append({"name": key, "value": value["type"], "_type": value["tyep"],
+                                                  "required": True, "restrict": "", "description": ""})
+                            requestApi["responseList"] = parameter
+                    except:
+                        pass
+            else:
+                requestApi["responseList"] = "{'description': 'OK'}"
+
+
         requestApi["userUpdate"] = user.id
         result = add_swagger_api(requestApi, user)
 
@@ -95,6 +217,13 @@ def add_swagger_api(data, user):
                                 head_serialize = ApiHeadDeserializer(data=i)
                                 if head_serialize.is_valid():
                                     head_serialize.save(api=ApiInfo.objects.get(id=api_id))
+
+                    if len(data.get("requestListPath")):
+                        pass
+
+                    if len(data.get("requestListQuery")):
+                        pass
+
                     if data["requestParameterType"] == "form-data":
                         if len(data.get("requestList")):
                             for i in data["requestList"]:

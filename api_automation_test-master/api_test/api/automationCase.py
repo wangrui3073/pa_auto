@@ -1,9 +1,9 @@
 import json
 import logging
+import os
 import platform
-
+import time
 from datetime import datetime
-
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
@@ -12,7 +12,8 @@ from django.db.models import Q
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.parsers import JSONParser
 from rest_framework.views import APIView
-
+from api_automation_test import settings
+from api_test.api.run_suit_platform import func
 from api_test.common.WriteExcel import Write
 from api_test.common.addTask import add
 from api_test.common.api_response import JsonResponse
@@ -20,16 +21,395 @@ from api_test.common.common import record_dynamic, create_json, del_task_crontab
 from api_test.common.confighttp import test_api
 from api_test.models import Project, AutomationGroupLevelFirst, \
     AutomationTestCase, AutomationCaseApi, AutomationParameter, GlobalHost, AutomationHead, AutomationTestTask, \
-    AutomationTestResult, ApiInfo, AutomationParameterRaw, AutomationResponseJson
-
+    AutomationTestResult, ApiInfo, AutomationParameterRaw, AutomationResponseJson, ApplicationScript, ScriptCase, \
+    AutomationParameterPath, AutomationParameterQuery
 from api_test.serializers import AutomationGroupLevelFirstSerializer, AutomationTestCaseSerializer, \
     AutomationCaseApiSerializer, AutomationCaseApiListSerializer, AutomationTestTaskSerializer, \
     AutomationTestResultSerializer, ApiInfoSerializer, CorrelationDataSerializer, AutomationTestReportSerializer, \
     AutomationTestCaseDeserializer, AutomationCaseApiDeserializer, AutomationHeadDeserializer, \
     AutomationParameterDeserializer, AutomationTestTaskDeserializer, ProjectSerializer, \
-    AutomationCaseDownSerializer
+    AutomationCaseDownSerializer, ApplicationScriptSerializer, ScriptCaseSerializer, \
+    AutomationParameterPathDeSerializer, AutomationParameterQueryDeSerializer
+from celery_tasks.start_script.tasks import send_start_script
+
 
 logger = logging.getLogger(__name__)  # 这里使用 __name__ 动态搜索定义的 logger 配置，这里有一个层次关系的知识点。
+
+
+# ---------------------------------------------------------------------------
+# 进阶
+
+
+
+# 执行应用脚本2
+class StartTaskApplicationScript2(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = ()
+    def parameter_check(self, data):
+        """校验参数"""
+        try:
+            # 校验project_id, id类型为int
+            if not data["project_id"] or not data["automationGroupLevelFirst_id"]:
+                return JsonResponse(code="999996", msg="参数有误！")
+            if not isinstance(data["project_id"], int) or not isinstance(data["id"], int)\
+                    or not isinstance(data["automationGroupLevelFirst_id"], int):
+                return JsonResponse(code="999996", msg="参数有误！")
+        except KeyError:
+            return JsonResponse(code="999996", msg="参数有误！")
+    def post(self, request):
+        data = JSONParser().parse(request)
+        result = self.parameter_check(data)
+        if result:
+            return result
+        try:
+            pro_data = Project.objects.get(id=data["project_id"])
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999995", msg="项目不存在！")
+        pro_data = ProjectSerializer(pro_data)
+        if not pro_data.data["status"]:
+            return JsonResponse(code="999985", msg="该项目已禁用")
+        try:
+            obj = ApplicationScript.objects.get(id = data["id"], project=data["project_id"])
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999990", msg="脚本不存在！")
+        # AutomationTestResult.objects.filter(automationScript=data["id"]).delete()
+        res_data = ApplicationScriptSerializer(obj)
+        try:
+            os.chdir(settings.BASE_DIR)
+            print(os.getcwd())
+            path = res_data.data["path"]
+            enter_file = res_data.data["enter_file"]
+            exit_file = res_data.data.get("exit_file")
+            # os.chdir(os.path.join(settings.BASE_DIR, "api_test/api"))
+            # os.system("celery -A celery_tasks.main worker -l info")
+            # if res_data.data.get("exit_file") is None:
+            #     res = os.system("python run_suit_platform.py %s %s %s" % (res_data.data["path"], res_data.data["enter_file"],
+            #                                               time.strftime("%Y%m%d%H%M%S", time.localtime()) + "_result.html"))
+            # else:
+            #     res = os.system("python run_suit_platform.py %s %s %s" % (res_data.data["path"], res_data.data["enter_file"],
+            #                                               res_data.data.get("exit_file")))
+            # send_start_script(path, enter_file, exit_file)
+            res = send_start_script.delay(path, enter_file, exit_file, res_data)
+            # for case in res["detail"]:
+            #     scr_case = ScriptCase.objects.create(case_name=case["scr_casename"], test_result=case["scr_result"],
+            #                               case_test_log=case["scr_log"], applicationScript_id=res_data.data["id"])
+            #     case_count = ScriptCase.objects.filter(case_name=case["scr_casename"], applicationScript_id=res_data.data["id"]).count()
+            #     if case_count > 10:
+            #         case_amount = ScriptCase.objects.filter(case_name=case["scr_casename"], applicationScript_id=res_data.data["id"]).order_by("-updateTime")
+            #         case_amount[10].delete()
+        except Exception as e:
+            logging.exception(e)
+            return JsonResponse(code="999998", msg="失败！")
+        # return JsonResponse(data={
+        #     "result": res
+        # }, code="999999", msg="成功！")
+        return JsonResponse( code="999999", msg="成功！")
+
+# 上传脚本
+class UploadScript(APIView):
+    pass
+
+# ------------------------------------------------------------------------
+
+
+
+
+
+# gitlab更新
+# class GitlabApplicationScript(APIView):
+#     authentication_classes = (TokenAuthentication,)
+#     permission_classes = ()
+
+# 显示脚本对应用例最近10次记录
+class LookScriptCase(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = ()
+    def get(self, request):
+        project_id = request.GET.get("project_id")
+        script_id = request.GET.get("script_id")
+        case_name = request.GET.get("case_name")
+        if not project_id.isdecimal():
+            return JsonResponse(code="999996", msg="参数有误！")
+        try:
+            pro_data = Project.objects.get(id=project_id)
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999995", msg="项目不存在！")
+        pro_data = ProjectSerializer(pro_data)
+        if not pro_data.data["status"]:
+            return JsonResponse(code="999985", msg="该项目已禁用")
+        try:
+            ApplicationScript.objects.get(id=script_id, project=project_id)
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999987", msg="脚本不存在！")
+        try:
+            data = ScriptCase.objects.filter(applicationScript=script_id, case_name=case_name).order_by("-updateTime")
+            serialize = ScriptCaseSerializer(data, many=True)
+            return JsonResponse(data=serialize.data, code="999999", msg="成功！")
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999999", msg="成功！")
+
+# 执行应用脚本
+class StartTaskApplicationScript(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = ()
+    def parameter_check(self, data):
+        """校验参数"""
+        try:
+            # 校验project_id, id类型为int
+            if not data["project_id"] or not data["automationGroupLevelFirst_id"]:
+                return JsonResponse(code="999996", msg="参数有误！")
+            if not isinstance(data["project_id"], int) or not isinstance(data["id"], int)\
+                    or not isinstance(data["automationGroupLevelFirst_id"], int):
+                return JsonResponse(code="999996", msg="参数有误！")
+        except KeyError:
+            return JsonResponse(code="999996", msg="参数有误！")
+    def post(self, request):
+        os.chdir(os.path.join(settings.BASE_DIR, "../../111/"))
+        print(os.getcwd())
+        # os.system("git clone https://github.com/wangrui3073/pa_auto.git")
+        os.system("git pull")
+        data = JSONParser().parse(request)
+        result = self.parameter_check(data)
+        if result:
+            return result
+        try:
+            pro_data = Project.objects.get(id=data["project_id"])
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999995", msg="项目不存在！")
+        pro_data = ProjectSerializer(pro_data)
+        if not pro_data.data["status"]:
+            return JsonResponse(code="999985", msg="该项目已禁用")
+        try:
+            obj = ApplicationScript.objects.get(id = data["id"], project=data["project_id"])
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999990", msg="脚本不存在！")
+        res_data = ApplicationScriptSerializer(obj)
+        try:
+            os.chdir(os.path.join(settings.BASE_DIR, "../../"))
+            path = res_data.data["path"]
+            enter_file = res_data.data["enter_file"]
+            exit_file = res_data.data.get("exit_file")
+            if exit_file:
+                res = func(path, enter_file, exit_file)
+                # res = os.popen('python abc.py %s %s %s' % (path, enter_file, exit_file)).read()
+            else:
+                res = func(path, enter_file, time.strftime("%Y%m%d%H%M%S", time.localtime()) + "_result.html")
+                # res = os.popen('python abc.py %s %s %s' % (path, enter_file, time.strftime("%Y%m%d%H%M%S", time.localtime()) + "_result.html")).read()
+            # res = res.split("\n")[0]
+            for case in res["detail"]:
+                ScriptCase.objects.create(case_name=case["scr_casename"], test_result=case["scr_result"],
+                                          case_test_log=case["scr_log"], applicationScript_id=res_data.data["id"])
+                case_count = ScriptCase.objects.filter(case_name=case["scr_casename"], applicationScript_id=res_data.data["id"]).count()
+                if case_count > 10:
+                    case_amount = ScriptCase.objects.filter(case_name=case["scr_casename"], applicationScript_id=res_data.data["id"]).order_by("-updateTime")
+                    case_amount[10].delete()
+        except Exception as e:
+            logging.exception(e)
+            return JsonResponse(code="999998", msg="失败！")
+        return JsonResponse(data={
+            "result": res
+        }, code="999999", msg="成功！")
+
+# 删除应用脚本
+class DeleteApplicationScript(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = ()
+    def parameter_check(self, data):
+        """校验参数"""
+        try:
+            # 校验project_id, id类型为int
+            if not data["project_id"] or not data["ids"]:
+                return JsonResponse(code="999996", msg="参数有误！")
+            if not isinstance(data["project_id"], int) or not isinstance(data["ids"], list):
+                return JsonResponse(code="999996", msg="参数有误！")
+            for i in data["ids"]:
+                if not isinstance(i, int):
+                    return JsonResponse(code="999996", msg="参数有误！")
+        except KeyError:
+            return JsonResponse(code="999996", msg="参数有误！")
+    def delete(self, request):
+        data = JSONParser().parse(request)
+        result = self.parameter_check(data)
+        if result:
+            return result
+        try:
+            pro_data = Project.objects.get(id=data["project_id"])
+            if not request.user.is_superuser and pro_data.user.is_superuser:
+                return JsonResponse(code="999983", msg="无操作权限！")
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999995", msg="项目不存在！")
+        pro_data = ProjectSerializer(pro_data)
+        if not pro_data.data["status"]:
+            return JsonResponse(code="999985", msg="该项目已禁用")
+        for j in data["ids"]:
+            obi = ApplicationScript.objects.filter(id=j, project=data['project_id'])
+            if len(obi) != 0:
+                name = obi[0].name
+                obi.delete()
+                record_dynamic(project=data["project_id"],
+                               _type="删除", operationObject="脚本应用", user=request.user.pk, data="删除脚本应用\"%s\"" % name)
+            else:
+                return JsonResponse(code="999988", msg="对应脚本不存在")
+        return JsonResponse(code="999999", msg="成功！")
+
+# 修改应用脚本
+class UpdateApplicationScript(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = ()
+    def parameter_check(self, data):
+        """校验参数"""
+        try:
+            # 校验project_id, id类型为int
+            if not data["project_id"] or not data["name"] or not data["id"] \
+                    or not data["automationGroupLevelFirst_id"]:
+                return JsonResponse(code="999996", msg="参数有误！")
+            if not isinstance(data["project_id"], int) or not isinstance(data["id"], int) \
+                    or not isinstance(data["automationGroupLevelFirst_id"], int):
+                return JsonResponse(code="999996", msg="参数有误！")
+        except KeyError:
+            return JsonResponse(code="999996", msg="参数有误！")
+    def post(self, request):
+        data = JSONParser().parse(request)
+        result = self.parameter_check(data)
+        if result:
+            return result
+        try:
+            pro_data = Project.objects.get(id=data["project_id"])
+            if not request.user.is_superuser and pro_data.user.is_superuser:
+                return JsonResponse(code="999983", msg="无操作权限！")
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999995", msg="项目不存在！")
+        pro_data = ProjectSerializer(pro_data)
+        if not pro_data.data["status"]:
+            return JsonResponse(code="999985", msg="该项目已禁用")
+        try:
+            obj = ApplicationScript.objects.get(id=data["id"], project=data["project_id"])
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999987", msg="脚本不存在！")
+        try:
+            AutomationGroupLevelFirst.objects.get(id=data["automationGroupLevelFirst_id"], project=data["project_id"])
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999991", msg="分组不存在！")
+        script_name = ApplicationScript.objects.filter(name=data["name"], project=data["project_id"]).exclude(
+            id=data["id"])
+        if len(script_name):
+            return JsonResponse(code="999997", msg="存在相同名称！")
+        else:
+            serializer = ApplicationScriptSerializer(data=data)
+            if serializer.is_valid():
+                serializer.update(instance=obj, validated_data=data)
+                return JsonResponse(code="999999", msg="成功！")
+            return JsonResponse(code="999998", msg="失败！")
+
+# 增加应用脚本
+class AddApplicationScript(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = ()
+    def parameter_check(self, data):
+        """校验参数"""
+        try:
+            # 校验project_id, id类型为int
+            if not data["project_id"] or not data["name"] or not data["automationGroupLevelFirst_id"]:
+                return JsonResponse(code="999996", msg="参数有误！")
+            if not isinstance(data["project_id"], int) or not isinstance(data["automationGroupLevelFirst_id"], int):
+                return JsonResponse(code="999996", msg="参数有误！")
+        except KeyError:
+            return JsonResponse(code="999996", msg="参数有误！")
+    def post(self, request):
+        data = JSONParser().parse(request)
+        result = self.parameter_check(data)
+        if result:
+            return result
+        data["user"] = request.user.pk
+        try:
+            obj = Project.objects.get(id=data["project_id"])
+            if not request.user.is_superuser and obj.user.is_superuser:
+                return JsonResponse(code="999983", msg="无操作权限！")
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999995", msg="项目不存在！")
+        pro_data = ProjectSerializer(obj)
+        if not pro_data.data["status"]:
+            return JsonResponse(code="999985", msg="该项目已禁用")
+        application_name = ApplicationScript.objects.filter(name=data["name"], project=data["project_id"])
+        if len(application_name):
+            return JsonResponse(code="999997", msg="存在相同名称！")
+        else:
+            with transaction.atomic():
+                try:
+                    serializer = ApplicationScriptSerializer(data=data)
+                    if serializer.is_valid():
+                        try:
+                            if not isinstance(data["automationGroupLevelFirst_id"], int):
+                                return JsonResponse(code="999996", msg="参数有误！")
+                            obi = AutomationGroupLevelFirst.objects.get(id=data["automationGroupLevelFirst_id"], project=data["project_id"])
+                            serializer.save(project=obj, automationGroupLevelFirst=obi, user=User.objects.get(id=data["user"]))
+                        except KeyError:
+                            serializer.save(project=obj, user=User.objects.get(id=data["user"]))
+                        record_dynamic(project=data["project_id"],
+                                       _type="新增", operationObject="脚本应用", user=request.user.pk,
+                                       data="新增脚本应用\"%s\"" % data["name"])
+                        return JsonResponse(data={"case_id": serializer.data.get("id")},
+                                            code="999999", msg="成功！")
+                    return JsonResponse(code="999996", msg="参数有误！")
+                except:
+                    return JsonResponse(code="999998", msg="失败！")
+
+# 获取应用脚本
+class ApplicationScriptList(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = ()
+    def get(self, request):
+        try:
+            page_size = int(request.GET.get("page_size", 20))
+            page = int(request.GET.get("page", 1))
+        except (TypeError, ValueError):
+            return JsonResponse(code="999985", msg="page and page_size must be integer！")
+        project_id = request.GET.get("project_id")
+        first_group_id = request.GET.get("first_group_id")
+        name = request.GET.get("name")
+        if not project_id:
+            return JsonResponse(code="999996", msg="参数有误！")
+        if not project_id.isdecimal():
+            return JsonResponse(code="999996", msg="参数有误！")
+        try:
+            pro_data = Project.objects.get(id=project_id)
+        except ObjectDoesNotExist:
+            return JsonResponse(code="999995", msg="项目不存在！")
+        pro_data = ProjectSerializer(pro_data)
+        if not pro_data.data["status"]:
+            return JsonResponse(code="999985", msg="该项目已禁用")
+        if first_group_id:
+            if not first_group_id.isdecimal():
+                return JsonResponse(code="999996", msg="参数有误！")
+            if name:
+                obi = ApplicationScript.objects.filter(project=project_id, name__contains=name,
+                                                       automationGroupLevelFirst=first_group_id).order_by("id")
+            else:
+                obi = ApplicationScript.objects.filter(project=project_id,
+                                                       automationGroupLevelFirst=first_group_id).order_by("id")
+        else:
+            if name:
+                obi = ApplicationScript.objects.filter(project=project_id, name__contains=name, ).order_by(
+                    "id")
+            else:
+                obi = ApplicationScript.objects.filter(project=project_id).order_by("id")
+        paginator = Paginator(obi, page_size)  # paginator对象
+        total = paginator.num_pages  # 总页数
+        try:
+            obm = paginator.page(page)
+        except PageNotAnInteger:
+            obm = paginator.page(1)
+        except EmptyPage:
+            obm = paginator.page(paginator.num_pages)
+        serialize = ApplicationScriptSerializer(obm, many=True)
+        return JsonResponse(data={"data": serialize.data,
+                                  "page": page,
+                                  "total": total
+                                  }, code="999999", msg="成功！")
+
+
+
+# --------------------------------------------------------
 
 
 class Group(APIView):
@@ -744,6 +1124,25 @@ class AddNewApi(APIView):
                             head_serialize = AutomationHeadDeserializer(data=i)
                             if head_serialize.is_valid():
                                 head_serialize.save(automationCaseApi=AutomationCaseApi.objects.get(id=api_id))
+
+                if data.get("requestListPath"):
+                    if len(data.get("requestListPath")):
+                        for i in data.get("requestListPath"):
+                            if i.get("name"):
+                                i["automationCaseApi_id"] = api_id
+                                param_serialize = AutomationParameterPathDeSerializer(data=i)
+                                if param_serialize.is_valid():
+                                    param_serialize.save(automationCaseApi=AutomationCaseApi.objects.get(id=api_id))
+
+                if data.get("requestListQuery"):
+                    if len(data.get("requestListQuery")):
+                        for i in data.get("requestListQuery"):
+                            if i.get("name"):
+                                i["automationCaseApi_id"] = api_id
+                                param_serialize = AutomationParameterQueryDeSerializer(data=i)
+                                if param_serialize.is_valid():
+                                    param_serialize.save(automationCaseApi=AutomationCaseApi.objects.get(id=api_id))
+
                 if data["requestParameterType"] == "form-data":
                     if len(data.get("requestList")):
                         for i in data.get("requestList"):
@@ -852,13 +1251,14 @@ class UpdateApi(APIView):
         :return:
         """
         data = JSONParser().parse(request)
+        print(data)
         result = self.parameter_check(data)
         if result:
             return result
         try:
             pro_data = Project.objects.get(id=data["project_id"])
-            if not request.user.is_superuser and pro_data.user.is_superuser:
-                return JsonResponse(code="999983", msg="无操作权限！")
+            # if not request.user.is_superuser and pro_data.user.is_superuser:
+            #     return JsonResponse(code="999983", msg="无操作权限！")
         except ObjectDoesNotExist:
             return JsonResponse(code="999995", msg="项目不存在！")
         pro_data = ProjectSerializer(pro_data)
@@ -899,6 +1299,47 @@ class UpdateApi(APIView):
                 AutomationHead.objects.exclude(header).filter(automationCaseApi=data["id"]).delete()
                 api_param = Q()
                 api_param_raw = Q()
+
+                if data.get("requestListPath"):
+                    for i in data["requestListPath"]:
+                        if i.get("automationCaseApi") and i.get("id"):
+                            api_param = api_param | Q(id=i["id"])
+                            if i["name"]:
+                                param_serialize = AutomationParameterPathDeSerializer(data=i)
+                                if param_serialize.is_valid():
+                                    i["automationCaseApi"] = AutomationCaseApi.objects.get(
+                                        id=i["automationCaseApi"])
+                                    param_serialize.update(instance=AutomationParameterPath.objects.get(id=i["id"]),
+                                                           validated_data=i)
+                        else:
+                            if i.get("name"):
+                                i["automationCaseApi"] = data['id']
+                                param_serialize = AutomationParameterPathDeSerializer(data=i)
+                                if param_serialize.is_valid():
+                                    param_serialize.save(
+                                        automationCaseApi=AutomationCaseApi.objects.get(id=data["id"]))
+                                    api_param = api_param | Q(id=param_serialize.data.get("id"))
+
+                if data.get("requestListQuery"):
+                    for i in data["requestListQuery"]:
+                        if i.get("automationCaseApi") and i.get("id"):
+                            api_param = api_param | Q(id=i["id"])
+                            if i["name"]:
+                                param_serialize = AutomationParameterQueryDeSerializer(data=i)
+                                if param_serialize.is_valid():
+                                    i["automationCaseApi"] = AutomationCaseApi.objects.get(
+                                        id=i["automationCaseApi"])
+                                    param_serialize.update(instance=AutomationParameterQuery.objects.get(id=i["id"]),
+                                                           validated_data=i)
+                        else:
+                            if i.get("name"):
+                                i["automationCaseApi"] = data['id']
+                                param_serialize = AutomationParameterQueryDeSerializer(data=i)
+                                if param_serialize.is_valid():
+                                    param_serialize.save(
+                                        automationCaseApi=AutomationCaseApi.objects.get(id=data["id"]))
+                                    api_param = api_param | Q(id=param_serialize.data.get("id"))
+
                 if len(data.get("requestList")):
                     if data["requestParameterType"] == "form-data":
                         AutomationParameterRaw.objects.filter(automationCaseApi=data["id"]).delete()

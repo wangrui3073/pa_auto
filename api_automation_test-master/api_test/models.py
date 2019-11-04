@@ -7,6 +7,14 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 
+
+
+STATUS_CHOICE = (
+    ('PASS', 'PASS'),
+    ('FAIL', 'FAIL'),
+    ('ERROR', 'ERROR')
+)
+
 HTTP_CHOICE = (
     ('HTTP', 'HTTP'),
     ('HTTPS', 'HTTPS')
@@ -140,7 +148,8 @@ class ProjectMember(models.Model):
     CHOICES = (
         ('超级管理员', '超级管理员'),
         ('开发人员', '开发人员'),
-        ('测试人员', '测试人员')
+        ('测试人员', '测试人员'),
+        ('邮件发送员', '邮件发送员'),
     )
     id = models.AutoField(primary_key=True)
     permissionType = models.CharField(max_length=50, verbose_name='权限角色', choices=CHOICES)
@@ -450,6 +459,39 @@ class AutomationHead(models.Model):
         verbose_name_plural = '请求头管理'
 
 
+# path的请求参数
+class AutomationParameterPath(models.Model):
+    id = models.AutoField(primary_key=True)
+    automationCaseApi = models.ForeignKey(AutomationCaseApi, related_name='parameterPath',
+                                          on_delete=models.CASCADE, verbose_name='接口')
+    name = models.CharField(max_length=1024, verbose_name='参数名')
+    value = models.CharField(max_length=1024, verbose_name='内容', blank=True, null=True)
+    interrelate = models.BooleanField(default=False, verbose_name='是否关联')
+
+    def __unicode__(self):
+        return self.value
+
+    class Meta:
+        verbose_name = 'path接口参数'
+        verbose_name_plural = 'path接口参数管理'
+
+# query的请求参数
+class AutomationParameterQuery(models.Model):
+    id = models.AutoField(primary_key=True)
+    automationCaseApi = models.ForeignKey(AutomationCaseApi, related_name='parameterQuery',
+                                          on_delete=models.CASCADE, verbose_name='接口')
+    name = models.CharField(max_length=1024, verbose_name='参数名')
+    value = models.CharField(max_length=1024, verbose_name='内容', blank=True, null=True)
+    interrelate = models.BooleanField(default=False, verbose_name='是否关联')
+
+    def __unicode__(self):
+        return self.value
+
+    class Meta:
+        verbose_name = 'query接口参数'
+        verbose_name_plural = 'query接口参数管理'
+
+
 class AutomationParameter(models.Model):
     """
     请求的参数
@@ -635,3 +677,60 @@ class VisitorsRecord(models.Model):
     class Meta:
         verbose_name = "访客"
         verbose_name_plural = "访客查看"
+
+# ---------------------------------------------------------
+
+# 应用和对应的脚本信息
+class ApplicationScript(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=120, verbose_name='应用名称')
+    path = models.CharField(max_length=120, verbose_name='对应路径')
+    enter_file = models.CharField(max_length=120, verbose_name='入口文件')
+    exit_file = models.CharField(max_length=120,  blank=True, null=True, verbose_name='出口文件')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, verbose_name='所属项目')
+    updateTime = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    description = models.CharField(max_length=1024, blank=True, null=True, verbose_name='描述')
+    createTime = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    automationGroupLevelFirst = models.ForeignKey(AutomationGroupLevelFirst, blank=True, null=True,
+                                                  on_delete=models.SET_NULL, verbose_name='所属用例一级分组',
+                                                  related_name="automationGroupscript")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, verbose_name="创建人",
+                             related_name="createUserScript")
+
+    def __unicode__(self):
+        return self.name
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "db_application"
+        verbose_name = "应用对应的脚本"
+        verbose_name_plural = "应用对应的脚本文件"
+
+# 脚本对应用例测试情况
+class ScriptCase(models.Model):
+    id = models.AutoField(primary_key=True)
+    case_name = models.CharField(max_length=120, verbose_name="用例名称")
+    test_result = models.CharField(max_length=50, verbose_name='测试结果', choices=STATUS_CHOICE)
+    case_test_log = models.CharField(max_length=1024, verbose_name="用例测试日志")
+    applicationScript = models.ForeignKey(ApplicationScript,on_delete=models.CASCADE, verbose_name='用例所对应的脚本',
+                                                  related_name="case_script")
+    updateTime = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    createTime = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+
+
+    def __unicode__(self):
+        return self.case_name
+
+    def __str__(self):
+        return self.case_name
+
+    class Meta:
+        db_table = "db_scriptcase"
+        verbose_name = "脚本的用例"
+        verbose_name_plural = "脚本的用例文件"
+
+
+
+

@@ -5,8 +5,11 @@ from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import transaction
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.parsers import JSONParser
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, DjangoModelPermissions, AllowAny, \
+    IsAdminUser
 from rest_framework.views import APIView
 
+import api_test
 from api_test.common.api_response import JsonResponse
 from api_test.common.common import record_dynamic
 from api_test.models import Project, GlobalHost
@@ -62,7 +65,7 @@ class HostTotal(APIView):
 
 class AddHost(APIView):
     authentication_classes = (TokenAuthentication,)
-    permission_classes = ()
+    permission_classes = (IsAuthenticated,)
 
     def parameter_check(self, data):
         """
@@ -80,6 +83,7 @@ class AddHost(APIView):
         except KeyError:
             return JsonResponse(code="999995", msg="参数有误！")
 
+
     def post(self, request):
         """
         添加Host
@@ -93,6 +97,7 @@ class AddHost(APIView):
         try:
             obj = Project.objects.get(id=data["project_id"])
             if not request.user.is_superuser and obj.user.is_superuser:
+            # if not request.user.has_perm and obj.user.has_perm:
                 return JsonResponse(code="999983", msg="无操作权限！")
         except ObjectDoesNotExist:
             return JsonResponse(code="999995", msg="项目不存在！")
@@ -209,6 +214,7 @@ class DelHost(APIView):
         try:
             pro_data = Project.objects.get(id=data["project_id"])
             if not request.user.is_superuser and pro_data.user.is_superuser:
+            # if not request.user.is_authenticated and pro_data.user.is_authenticated:
                 return JsonResponse(code="999983", msg="无操作权限！")
         except ObjectDoesNotExist:
             return JsonResponse(code="999995", msg="项目不存在！")
